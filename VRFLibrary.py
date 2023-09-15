@@ -2,7 +2,7 @@ import binascii
 import ctypes
 
 # Load the shared library (DLL) containing the C functions
-crypto_vrf = ctypes.CDLL("C:/Users/SISSY/PycharmProjects/pythonProject/libsodium.dll")
+crypto_vrf = ctypes.CDLL("libsodium.dll")
 
 # Function prototypes
 crypto_vrf.crypto_vrf_publickeybytes.restype = ctypes.c_size_t
