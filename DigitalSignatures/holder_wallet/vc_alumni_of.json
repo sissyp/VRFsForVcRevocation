@@ -1,0 +1,18 @@
+{
+    "@context": [
+        "https://www.w3.org/2018/credentials/v1",
+        "https://www.example.com/contexts/examples-v1.jsonld"
+    ],
+    "id": "https://example.com/credentials/345",
+    "type": ["VerifiableCredential", "AlumniOfCredential"],
+    "issuer": "did:example:834",
+    "issuanceDate": "2023-08-23T12:34:56Z",
+    "credentialSubject": {
+        "university": {
+            "type": "BachelorDegree",
+            "name": "Bachelor of Science",
+            "university": "Example University",
+            "graduated": "2022"
+        }
+    }
+}
