@@ -1,13 +1,20 @@
 import ast
+import base64
 import binascii
+import time
 
 import requests
 import json
+
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
+
 from VRFLibrary import crypto_vrf_verify, convert_from_hex, crypto_vrf_proof_to_hash
 from Issuer import get_revocation_hash_table
 
 
 def receive_vp():
+    start_time = time.time()
     # URL of the holder's endpoint
     holder_url = 'http://127.0.0.1:5000/receive_vp'
 
@@ -39,19 +46,55 @@ def receive_vp():
             proof = convert_from_hex(proof_hex, 80)
             pk = convert_from_hex(pk_hex, 32)
 
-            proof_hash = crypto_vrf_proof_to_hash(proof)
-            output_pop = crypto_vrf_verify(pk, pop, credential_id_b)
-            output_proof = crypto_vrf_verify(pk, proof, challenge_b)
+            pop_hash = crypto_vrf_proof_to_hash(pop)
+            output_proof = crypto_vrf_verify(pk, proof, credential_id_b)
+            output_pop = crypto_vrf_verify(pk, pop, challenge_b)
 
-            proof_hash_hex = binascii.hexlify(proof_hash).decode('utf-8')
+            pop_hash_hex = binascii.hexlify(pop_hash).decode('utf-8')
             output_pop_hex = binascii.hexlify(output_pop).decode('utf-8')
             output_proof_hex = binascii.hexlify(output_proof).decode('utf-8')
             print("output_pop_hex", output_pop_hex)
             print("output_proof_hex", output_proof_hex)
             print("vc_hash", vc_hash)
-            print("proof_hash", proof_hash_hex)
+            print("pop_hash", pop_hash_hex)
 
-            if output_proof_hex == proof_hash_hex and output_pop_hex == vc_hash:
+            if output_pop_hex == pop_hash_hex and output_proof_hex == vc_hash:
+
+                received_vc = received_vp['verifiableCredential']
+
+                # Extract the encoded signature from the received VC
+                encoded_signature = received_vc['proof']['jws']
+
+                issuer_pk_pem = received_vc['proof']['verificationMethod']
+
+                # Load the issuer's public key for verification
+                verification_key_pem = base64.b64decode(issuer_pk_pem)
+                print("Verification key in pem format", verification_key_pem)
+
+                verification_key = serialization.load_pem_public_key(
+                    verification_key_pem, backend=default_backend()
+                )
+
+                received_proof = received_vc['proof']
+
+                # Remove the proof section before verification
+                del received_vc['proof']
+
+                # Serialize the VC without the proof
+                vc_without_proof_json = json.dumps(received_vc, separators=(',', ':'), sort_keys=True)
+
+                # Verify the signature
+                try:
+                    decoded_signature = bytes.fromhex(encoded_signature)
+                    verification_key.verify(
+                        decoded_signature,
+                        vc_without_proof_json.encode('utf-8')
+                    )
+                    print("Signature is valid. VC is verified.")
+                    received_vc['proof'] = received_proof
+                except Exception as e:
+                    print("Signature verification failed:", e)
+
                 # check revocation status
                 revocation_hash_table = get_revocation_hash_table()
                 revocation_dict = {}
@@ -70,6 +113,9 @@ def receive_vp():
                         print("VRF proofs are valid.\n ")
                         print("VRF revocation status is checked.\n")
                         print("VP is verified.\n")
+                        end_time = time.time()
+                        elapsed_time = end_time - start_time
+                        print("Time required to verify a VP: ", elapsed_time)
                     else:
                         print("There is at least one revoked VC.")
                 else:

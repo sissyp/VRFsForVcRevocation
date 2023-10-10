@@ -19,10 +19,9 @@ def get_id():
 # Issuer sends a VC to a Holder
 @app.route('/get_vc', methods=['GET'])
 def get_vc():
-    # Issuer's signed VC and public key
-    signed_vc, issuer_pk = sign_vc()
-    issuer_pk_base64 = base64.b64encode(issuer_pk).decode('utf-8')
-    return jsonify(signed_vc=signed_vc, issuer_pk=issuer_pk_base64)
+    # Issuer's signed VC
+    signed_vc = sign_vc()
+    return jsonify(signed_vc=signed_vc)
 
 
 # Verifier sends random challenge to the Holder

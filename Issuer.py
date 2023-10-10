@@ -1,4 +1,6 @@
 import ast
+import time
+import base64
 import binascii
 import json
 from GenerateKeyPair import create_public_private_key_pair
@@ -65,6 +67,7 @@ def revoke_vc(vc_hash):
 
 
 def sign_vc():
+    start_time = time.time()
     # verify the Holder's public key
     vc_proof = calculate_credential_hash()
     with open("public_key.txt", "r") as pk_file:
@@ -99,6 +102,8 @@ def sign_vc():
                 private_key_pem, password=None, backend=default_backend()
             )
 
+            issuer_pk_base64 = base64.b64encode(public_key_pem).decode('utf-8')
+
             # Serialize the compact_vc to a JSON string
             signing_input = json.dumps(vc, separators=(',', ':'), sort_keys=True)
 
@@ -113,7 +118,7 @@ def sign_vc():
             vc['proof'] = {
                 "type": "Ed25519Signature2018",
                 "created": "2023-08-23T12:34:56Z",
-                "verificationMethod": "did:example:123#key1",
+                "verificationMethod": issuer_pk_base64,
                 "proofPurpose": "assertionMethod",
                 "jws": encoded_signature
             }
@@ -122,6 +127,9 @@ def sign_vc():
             vc_json = json.dumps(vc, indent=2)
             print(vc_json)
             print(revocation_hash_table)
-            return vc_json, public_key_pem
+            end_time = time.time()
+            elapsed_time = end_time - start_time
+            print("Time required to sign a VC: ", elapsed_time)
+            return vc_json
     else:
         print("VRF proof not verified by Issuer")

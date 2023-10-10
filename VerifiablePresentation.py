@@ -1,13 +1,15 @@
 import binascii
 import json
+import time
 from Holder import calculate_proof
 from VRFLibrary import crypto_vrf_prove, convert_from_hex
 
 
 def create_verifiable_presentation():
-    proof = calculate_proof()
-    print("proof for challenge", binascii.hexlify(proof).decode('utf-8'))
-    proof_hex = binascii.hexlify(proof).decode('utf-8')
+    start_time = time.time()
+    pop = calculate_proof()
+    print("proof for challenge", binascii.hexlify(pop).decode('utf-8'))
+    pop_hex = binascii.hexlify(pop).decode('utf-8')
 
     # create an example Verifiable Presentation
     with open("holder_wallet/UniversityDegreeCredential.json", "r") as vc1_file:
@@ -37,8 +39,8 @@ def create_verifiable_presentation():
     credential_id = vc1['id']
     id_b = bytes(credential_id, 'utf-8')
     sk = convert_from_hex(h_sk, 64)
-    pop = crypto_vrf_prove(sk, id_b)
-    pop_hex = binascii.hexlify(pop).decode('utf-8')
+    proof = crypto_vrf_prove(sk, id_b)
+    proof_hex = binascii.hexlify(proof).decode('utf-8')
 
     vp['proof'] = {
         "type": "VRF2023",
@@ -50,6 +52,9 @@ def create_verifiable_presentation():
 
     # Serialize the verifiable presentation
     vp_json = json.dumps(vp, indent=2)
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+    print("Time required to create a VP: ", elapsed_time)
 
     print(vp_json)
     return vp_json

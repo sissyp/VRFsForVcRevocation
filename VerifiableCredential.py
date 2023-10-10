@@ -16,12 +16,13 @@ def receive_vc():
         response_data = response.json()
         received_vc_str = response_data['signed_vc']
         received_vc = json.loads(received_vc_str)
-        issuer_pk_pem = response_data['issuer_pk']
 
         print("Received VC:", received_vc)
 
         # Extract the encoded signature from the received VC
         encoded_signature = received_vc['proof']['jws']
+
+        issuer_pk_pem = received_vc['proof']['verificationMethod']
 
         # Load the issuer's public key for verification
         verification_key_pem = base64.b64decode(issuer_pk_pem)
@@ -30,6 +31,8 @@ def receive_vc():
         verification_key = serialization.load_pem_public_key(
             verification_key_pem, backend=default_backend()
         )
+
+        received_proof = received_vc['proof']
 
         # Remove the proof section before verification
         del received_vc['proof']
@@ -49,6 +52,7 @@ def receive_vc():
             # Store the VC in the Holder's wallet
             vc_name = received_vc['type'][1]
             vc_filename = f"holder_wallet/{vc_name}.json"
+            received_vc['proof'] = received_proof
             with open(vc_filename, "w") as vc_file:
                 json.dump(received_vc, vc_file, indent=2)
             print(f"VC stored in {vc_filename}")
