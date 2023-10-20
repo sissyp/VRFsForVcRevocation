@@ -96,20 +96,45 @@ def receive_vp():
                     print("Signature verification failed:", e)
 
                 # check revocation status
-                revocation_hash_table = get_revocation_hash_table()
-                revocation_dict = {}
-                try:
-                    revocation_dict = ast.literal_eval(revocation_hash_table)
-                    if isinstance(revocation_dict, dict):
-                        print("Successfully converted the string to a dictionary:")
-                        print(revocation_dict)
-                    else:
-                        print("The input string does not represent a valid dictionary.")
-                except (SyntaxError, ValueError):
-                    print("Failed to convert the input string to a dictionary.")
-                print(revocation_dict)
-                if vc_hash in revocation_dict:
-                    if revocation_dict[vc_hash] == 0:
+                with open("revocation_list.txt", "r") as file:
+                    revocation_list = file.read()
+
+                revocation_credential = json.loads(revocation_list)
+                vc_revocation_list = received_vc['credentialStatus']["revocationListCredential"]
+                revocation_list_name = revocation_credential["id"]
+
+                if vc_revocation_list == revocation_list_name:
+                    received_proof_rl = revocation_credential['proof']
+                    encoded_rl_sig = revocation_credential['proof']['jws']
+
+                    # Remove the proof section before verification
+                    del revocation_credential['proof']
+
+                    # Serialize the VC without the proof
+                    rl_without_proof_json = json.dumps(revocation_credential, separators=(',', ':'), sort_keys=True)
+
+                    # Verify the signature
+                    try:
+                        decoded_signature = bytes.fromhex(encoded_rl_sig)
+                        verification_key.verify(
+                            decoded_signature,
+                            rl_without_proof_json.encode('utf-8')
+                        )
+                        print("Signature of revocation list is valid.")
+                        revocation_credential['proof'] = received_proof_rl
+                    except Exception as e:
+                        print("Signature verification of revocation list failed:", e)
+
+                    encoded_rl = revocation_credential["credentialSubject"]["encodedList"]
+                    decoded_list_bytes = base64.b64decode(encoded_rl)
+
+                    # Convert the bytes to a JSON string
+                    decoded_list_json = decoded_list_bytes.decode('utf-8')
+
+                    # Parse the JSON string into a Python dictionary
+                    revocation_data = json.loads(decoded_list_json)
+
+                    if revocation_data[vc_hash] == 0:
                         print("VRF proofs are valid.\n ")
                         print("VRF revocation status is checked.\n")
                         print("VP is verified.\n")
@@ -118,8 +143,6 @@ def receive_vp():
                         print("Time required to verify a VP: ", elapsed_time)
                     else:
                         print("There is at least one revoked VC.")
-                else:
-                    print("VCs not present in hash table.")
             else:
                 print("Proofs are not valid.")
         except Exception as e:
