@@ -59,9 +59,45 @@ def receive_vp():
 
         # check revocation status
         with open("revocation_list.txt", "r") as file:
-            revocation_list = file.readlines()
-        revocation_list_index = int(received_vc['credentialSubject']['revocationListIndex'])
-        if revocation_list[revocation_list_index] == "0":
+            revocation_list = file.read()
+
+        revocation_credential = json.loads(revocation_list)
+        revocation_list_index = received_vc['credentialStatus']['revocationListIndex']
+        vc_revocation_list = received_vc['credentialStatus']["revocationListCredential"]
+        revocation_list_name = revocation_credential["id"]
+
+        if vc_revocation_list == revocation_list_name:
+            received_proof_rl = revocation_credential['proof']
+            encoded_rl_sig = revocation_credential['proof']['jws']
+
+            # Remove the proof section before verification
+            del revocation_credential['proof']
+
+            # Serialize the VC without the proof
+            rl_without_proof_json = json.dumps(revocation_credential, separators=(',', ':'), sort_keys=True)
+
+            # Verify the signature
+            try:
+                decoded_signature = bytes.fromhex(encoded_rl_sig)
+                verification_key.verify(
+                    decoded_signature,
+                    rl_without_proof_json.encode('utf-8')
+                )
+                print("Signature of revocation list is valid.")
+                revocation_credential['proof'] = received_proof_rl
+            except Exception as e:
+                print("Signature verification of revocation list failed:", e)
+
+        encoded_rl = revocation_credential["credentialSubject"]["encodedList"]
+        decoded_list_bytes = base64.b64decode(encoded_rl)
+
+        # Convert the bytes to a JSON string
+        decoded_list_json = decoded_list_bytes.decode('utf-8')
+
+        # Parse the JSON string into a Python dictionary
+        revocation_data = json.loads(decoded_list_json)
+
+        if revocation_data[revocation_list_index] == 0:
             print("VC revocation status checked -> Non revoked")
             print("VC is verified.")
 

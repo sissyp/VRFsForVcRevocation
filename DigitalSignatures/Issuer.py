@@ -17,17 +17,37 @@ vc = {
     "type": ["VerifiableCredential", "UniversityDegreeCredential"],
     "issuer": "did:example:123",
     "issuanceDate": "2023-08-23T12:34:56Z",
+    "credentialStatus": {
+        "type": "RevocationList2020Status",
+        "revocationListIndex": "0",
+        "revocationListCredential": "https://example.com/credentials/status/3"
+      },
     "credentialSubject": {
         "degree": {
             "type": "BachelorDegree",
             "name": "Bachelor of Science",
             "university": "Example University"
-        },
-        "revocationListIndex": "0"
+        }
     }
 }
 
-revocation_list = []
+RevocationList = {
+      "@context": [
+        "https://www.w3.org/2018/credentials/v1",
+        "https://w3id.org/vc-revocation-list-2020/v1"
+      ],
+      "id": "https://example.com/credentials/status/3",
+      "type": ["VerifiableCredential", "RevocationList2020Credential"],
+      "issuer": "did:example:123",
+      "issued": "2020-04-05T14:27:40Z",
+      "credentialSubject": {
+        "id": "https://example.com/status/3#list",
+        "type": "RevocationList2020"
+      }
+}
+
+
+revocation_list = {}
 
 
 # revoke a VC by changing the status to 1
@@ -105,15 +125,50 @@ def sign_vc():
     }
 
     # add vc with 0 value in revocation list
-    revocation_list.append(0)
-    with open("revocation_list.txt", "w") as file:
-        file.write("0")
+    revocation_list[0] = 0
+    with open("revocation_list.txt", 'w') as file:
+        file.write(str(revocation_list))
+
+    revocation_data_dict = {str(key): value for key, value in revocation_list.items()}
+
+    # Convert the dictionary to a JSON string
+    revocation_data_json = json.dumps(revocation_data_dict, separators=(',', ':'), sort_keys=True)
+
+    # Encode the JSON string to Base64
+    encoded_list = base64.b64encode(revocation_data_json.encode('utf-8')).decode('utf-8')
+
+    RevocationList["credentialSubject"]["encodedList"] = encoded_list
+
+    signing_list = json.dumps(RevocationList, separators=(',', ':'), sort_keys=True)
+
+    # Sign the serialized input
+    signature = private_key.sign(
+        signing_list.encode('utf-8')
+    )
+
+    # Encode the signature as base64
+    encoded_list_signature = signature.hex()
+
+    RevocationList['proof'] = {
+        "type": "Ed25519Signature2018",
+        "created": "2023-08-23T12:34:56Z",
+        "verificationMethod": issuer_pk_base64,
+        "proofPurpose": "assertionMethod",
+        "jws": encoded_list_signature
+    }
 
     # Serialize the verifiable credential
     vc_json = json.dumps(vc, indent=2)
     print(vc_json)
-    end_time = time.time()
 
+    # Serialize Revocation List
+    rl_json = json.dumps(RevocationList, indent=2)
+    print(rl_json)
+
+    with open("revocation_list.txt", 'w') as file:
+        file.write(rl_json)
+
+    end_time = time.time()
     elapsed_time = end_time - start_time
     print("Time required to sign VC: ", elapsed_time)
 
