@@ -1,5 +1,6 @@
 import base64
 import json
+import time
 
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
@@ -83,5 +84,8 @@ def revoke_vc(index):
     print(revocation_data)
 
 
+start_time = time.time()
 revoke_vc(0)
-
+end_time = time.time()
+elapsed_time = end_time - start_time
+print("Time required to revoke a VC: ", elapsed_time)
