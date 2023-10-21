@@ -1,4 +1,5 @@
 import base64
+import binascii
 import json
 import requests
 import time
@@ -50,11 +51,6 @@ RevocationList = {
 revocation_list = {}
 
 
-# revoke a VC by changing the status to 1
-def revoke_vc(index):
-    revocation_list[index] = 1
-
-
 def get_signature():
     # URL of the Issuer's endpoint
     holder_url = 'http://127.0.0.1:5000/get_signature'
@@ -96,6 +92,10 @@ def sign_vc():
 
     # Sign the verifiable credential
     private_key_pem, public_key_pem = create_public_private_key_pair()
+    with open('issuer_pk.txt', 'w') as file:
+        file.write(binascii.hexlify(public_key_pem).decode('utf-8'))
+    with open('issuer_sk.txt', 'w') as file:
+        file.write(binascii.hexlify(private_key_pem).decode('utf-8'))
     print(public_key_pem)
     print(type(public_key_pem))
     private_key = serialization.load_pem_private_key(
