@@ -1,8 +1,8 @@
-import base64
+import binascii
+
 import requests
 import json
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import serialization
+from VRFLibrary import crypto_vrf_proof_to_hash, crypto_vrf_verify, convert_from_hex
 
 
 def receive_vc():
@@ -19,46 +19,37 @@ def receive_vc():
 
         print("Received VC:", received_vc)
 
-        # Extract the encoded signature from the received VC
-        encoded_signature = received_vc['proof']['jws']
+        # Extract the Issuer's proof from the received VC
+        issuer_proof = received_vc['proof']['vrfProof']
 
         issuer_pk_pem = received_vc['proof']['verificationMethod']
 
+        vc_hash_id = received_vc['credentialSubject']['id']
+
         # Load the issuer's public key for verification
-        verification_key_pem = base64.b64decode(issuer_pk_pem)
-        print("Verification key in pem format", verification_key_pem)
+        proof = convert_from_hex(issuer_proof, 80)
+        pk = convert_from_hex(issuer_pk_pem, 32)
+        vc_hash = bytes(vc_hash_id, 'utf-8')
+        print("Verification key in pem format", pk)
+        hash_from_issuer_proof = crypto_vrf_proof_to_hash(proof)
+        output = crypto_vrf_verify(pk, proof, vc_hash)
 
-        verification_key = serialization.load_pem_public_key(
-            verification_key_pem, backend=default_backend()
-        )
+        hash_from_issuer_proof_hex = binascii.hexlify(hash_from_issuer_proof).decode('utf-8')
+        output_hex = binascii.hexlify(output).decode('utf-8')
+        print("hash from vrf issuer", hash_from_issuer_proof_hex)
+        print("output issuer", output_hex)
 
-        received_proof = received_vc['proof']
-
-        # Remove the proof section before verification
-        del received_vc['proof']
-
-        # Serialize the VC without the proof
-        vc_without_proof_json = json.dumps(received_vc, separators=(',', ':'), sort_keys=True)
-
-        # Verify the signature
-        try:
-            decoded_signature = bytes.fromhex(encoded_signature)
-            verification_key.verify(
-                decoded_signature,
-                vc_without_proof_json.encode('utf-8')
-            )
-            print("Signature is valid. VC is verified.")
-
+        if hash_from_issuer_proof_hex == output_hex:
+            print("Issuer's VRF proof has been verified")
             # Store the VC in the Holder's wallet
             vc_name = received_vc['type'][1]
             vc_filename = f"holder_wallet/{vc_name}.json"
-            received_vc['proof'] = received_proof
             with open(vc_filename, "w") as vc_file:
                 json.dump(received_vc, vc_file, indent=2)
             print(f"VC stored in {vc_filename}")
+        else:
+            print("Failed to verify Issuer's VRF proof")
 
-        except Exception as e:
-            print("Signature verification failed:", e)
     else:
         print("Failed to fetch VC. Status code:", response.status_code)
 

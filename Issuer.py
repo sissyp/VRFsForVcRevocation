@@ -1,17 +1,13 @@
-import ast
 import time
 import base64
 import binascii
 import json
-from GenerateKeyPair import create_public_private_key_pair
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.backends import default_backend
 from Holder import calculate_credential_hash
-from VRFLibrary import crypto_vrf_verify, crypto_vrf_proof_to_hash, convert_from_hex
+from VRFLibrary import crypto_vrf_verify, crypto_vrf_proof_to_hash, convert_from_hex, crypto_vrf_keypair, \
+    crypto_vrf_prove
 
 # Create the verifiable credential
-# the VC does not correlate the Holder with the credential
-# it only has an id for credentials of the same type
+# it has an id for credentials of the same type
 # e.g., ability to drive
 
 revocation_hash_table = {}
@@ -58,33 +54,6 @@ def credential_type():
     return vc['id']
 
 
-def get_revocation_hash_table():
-    with open("revocation_table.txt", "r") as file:
-        revocation_table = file.readline()
-    return revocation_table
-
-
-# revoke a specific credential
-def revoke_vc(vc_hash):
-    revocation_table = get_revocation_hash_table()
-    revocation_dict = {}
-    try:
-        revocation_dict = ast.literal_eval(revocation_table)
-        if isinstance(revocation_dict, dict):
-            print("Successfully converted the string to a dictionary:")
-            print(revocation_dict)
-        else:
-            print("The input string does not represent a valid dictionary.")
-    except (SyntaxError, ValueError):
-        print("Failed to convert the input string to a dictionary.")
-
-    if vc_hash in revocation_dict:
-        if revocation_dict[vc_hash] == 0:
-            revocation_dict[vc_hash] = 1
-    with open("revocation_table.txt", 'w') as file:
-        file.write(str(revocation_dict))
-
-
 def sign_vc():
     start_time = time.time()
     # verify the Holder's public key
@@ -97,6 +66,13 @@ def sign_vc():
     hash_from_proof = crypto_vrf_proof_to_hash(vc_proof)
     print("hash from proof", binascii.hexlify(hash_from_proof).decode('utf-8'))
     print("output", binascii.hexlify(output).decode('utf-8'))
+
+    # create Issuer's keypair
+    issuer_pk, issuer_sk = crypto_vrf_keypair()
+    with open('issuer_pk.txt', 'w') as file:
+        file.write(binascii.hexlify(issuer_pk).decode('utf-8'))
+    with open('issuer_sk.txt', 'w') as file:
+        file.write(binascii.hexlify(issuer_sk).decode('utf-8'))
 
     if binascii.hexlify(hash_from_proof).decode('utf-8') == binascii.hexlify(output).decode('utf-8'):
 
@@ -113,18 +89,9 @@ def sign_vc():
             with open("revocation_table.txt", 'w') as file:
                 file.write(str(revocation_hash_table))
 
-            # Sign the verifiable credential
-            private_key_pem, public_key_pem = create_public_private_key_pair()
-            print(public_key_pem)
-            print(type(public_key_pem))
-            private_key = serialization.load_pem_private_key(
-                private_key_pem, password=None, backend=default_backend()
-            )
-
-            issuer_pk_base64 = base64.b64encode(public_key_pem).decode('utf-8')
-
-            # Serialize the compact_vc to a JSON string
-            signing_input = json.dumps(vc, separators=(',', ':'), sort_keys=True)
+            # Create Issuer's proof for the VC (similar to signature in a DS system)
+            vc_hash_bytes = bytes(vc_hash, 'utf-8')
+            issuer_proof = crypto_vrf_prove(issuer_sk, vc_hash_bytes)
 
             revocation_data_dict = {str(key): value for key, value in revocation_hash_table.items()}
 
@@ -135,39 +102,27 @@ def sign_vc():
             encoded_list = base64.b64encode(revocation_data_json.encode('utf-8')).decode('utf-8')
 
             RevocationList["credentialSubject"]["encodedList"] = encoded_list
+            encoded_list_bytes = bytes(encoded_list, 'utf-8')
+            issuer_proof_rl = crypto_vrf_prove(issuer_sk, encoded_list_bytes)
 
-            signing_list = json.dumps(RevocationList, separators=(',', ':'), sort_keys=True)
-
-            # Sign the serialized input
-            signature = private_key.sign(
-                signing_list.encode('utf-8')
-            )
-
-            # Encode the signature as base64
-            encoded_list_signature = signature.hex()
+            issuer_pk_hex = binascii.hexlify(issuer_pk).decode('utf-8')
+            issuer_proof_hex = binascii.hexlify(issuer_proof).decode('utf-8')
+            issuer_proof_rl_hex = binascii.hexlify(issuer_proof_rl).decode('utf-8')
 
             RevocationList['proof'] = {
                 "type": "Ed25519Signature2018",
                 "created": "2023-08-23T12:34:56Z",
-                "verificationMethod": issuer_pk_base64,
+                "verificationMethod": issuer_pk_hex,
                 "proofPurpose": "assertionMethod",
-                "jws": encoded_list_signature
+                "vrfProof": issuer_proof_rl_hex
             }
-
-            # Sign the serialized input
-            signature = private_key.sign(
-                signing_input.encode('utf-8')
-            )
-
-            # Encode the signature as base64
-            encoded_signature = signature.hex()
 
             vc['proof'] = {
                 "type": "Ed25519Signature2018",
                 "created": "2023-08-23T12:34:56Z",
-                "verificationMethod": issuer_pk_base64,
+                "verificationMethod": issuer_pk_hex,
                 "proofPurpose": "assertionMethod",
-                "jws": encoded_signature
+                "vrfProof": issuer_proof_hex
             }
 
             # Serialize the verifiable credential
@@ -179,7 +134,7 @@ def sign_vc():
             rl_json = json.dumps(RevocationList, indent=2)
             print(rl_json)
 
-            with open("revocation_list.txt", 'w') as file:
+            with open("revocation_table.txt", 'w') as file:
                 file.write(rl_json)
 
             end_time = time.time()
