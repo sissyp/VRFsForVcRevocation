@@ -6,10 +6,10 @@ from VRFLibrary import crypto_vrf_prove, convert_from_hex
 
 
 def create_verifiable_presentation():
+    proof = calculate_proof()
     start_time = time.time()
-    pop = calculate_proof()
-    print("proof for challenge", binascii.hexlify(pop).decode('utf-8'))
-    pop_hex = binascii.hexlify(pop).decode('utf-8')
+    print("proof for challenge", binascii.hexlify(proof).decode('utf-8'))
+    proof_hex = binascii.hexlify(proof).decode('utf-8')
 
     # create an example Verifiable Presentation
     with open("holder_wallet/UniversityDegreeCredential.json", "r") as vc1_file:
@@ -31,22 +31,10 @@ def create_verifiable_presentation():
     with open("public_key.txt", "r") as pk_file:
         h_pk = pk_file.readline()
 
-    with open("holder_wallet/private_key.txt", "r") as sk_file:
-        h_sk = sk_file.readline()
-
-    # calculate proof that the Holder possesses the credential
-
-    credential_id = vc1['id']
-    id_b = bytes(credential_id, 'utf-8')
-    sk = convert_from_hex(h_sk, 64)
-    proof = crypto_vrf_prove(sk, id_b)
-    proof_hex = binascii.hexlify(proof).decode('utf-8')
-
     vp['proof'] = {
         "type": "VRF2023",
         "created": "2023-08-23T12:34:56Z",
         "verificationMethod": h_pk,
-        "proofOfPossession": pop_hex,
         "proof": proof_hex
     }
 

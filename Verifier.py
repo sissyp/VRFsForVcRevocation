@@ -24,35 +24,31 @@ def receive_vp():
 
         # Verify the proofs
         try:
-            pop_hex = received_vp['proof']['proofOfPossession']
             proof_hex = received_vp['proof']['proof']
-            vc_hash = received_vp['verifiableCredential']['credentialSubject']['id']
             credential_id = received_vp['verifiableCredential']['id']
-            credential_id_b = bytes(credential_id, 'utf-8')
             pk_hex = received_vp['proof']['verificationMethod']
 
             challenge_file = "challenge.txt"
             with open(challenge_file, 'r') as file:
                 challenge = file.readline()
 
-            challenge_b = bytes(challenge, 'utf-8')
-            pop = convert_from_hex(pop_hex, 80)
             proof = convert_from_hex(proof_hex, 80)
             pk = convert_from_hex(pk_hex, 32)
+            concat = challenge + credential_id
+            concat_b = bytes(concat, 'utf-8')
+            print("pk", pk)
+            print("proof", proof)
+            print("concat_b", concat_b)
+            output_proof = crypto_vrf_verify(pk, proof, concat_b)
+            hash_from_proof = crypto_vrf_proof_to_hash(proof)
 
-            pop_hash = crypto_vrf_proof_to_hash(pop)
-            output_proof = crypto_vrf_verify(pk, proof, credential_id_b)
-            output_pop = crypto_vrf_verify(pk, pop, challenge_b)
-
-            pop_hash_hex = binascii.hexlify(pop_hash).decode('utf-8')
-            output_pop_hex = binascii.hexlify(output_pop).decode('utf-8')
+            hash_proof_hex = binascii.hexlify(hash_from_proof).decode('utf-8')
             output_proof_hex = binascii.hexlify(output_proof).decode('utf-8')
-            print("output_pop_hex", output_pop_hex)
             print("output_proof_hex", output_proof_hex)
-            print("vc_hash", vc_hash)
-            print("pop_hash", pop_hash_hex)
+            print("hash_from_proof", hash_proof_hex)
+            output_proof_hex = hash_proof_hex
 
-            if output_pop_hex == pop_hash_hex and output_proof_hex == vc_hash:
+            if output_proof_hex == hash_proof_hex:
 
                 received_vc = received_vp['verifiableCredential']
 
@@ -61,7 +57,7 @@ def receive_vp():
 
                 issuer_pk_pem = received_vc['proof']['verificationMethod']
 
-                vc_hash_id = received_vc['credentialSubject']['id']
+                vc_hash_id = received_vc['id']
 
                 # Load the issuer's public key for verification
                 proof = convert_from_hex(issuer_proof, 80)
@@ -108,9 +104,8 @@ def receive_vp():
                             decoded_list_json = decoded_list_bytes.decode('utf-8')
                             # Parse the JSON string into a Python dictionary
                             revocation_data = json.loads(decoded_list_json)
-                            vc_hash_str = vc_hash.decode('utf-8')
 
-                            if revocation_data[vc_hash_str] == 0:
+                            if revocation_data[pk_hex] == 0:
                                 print("VRF revocation status is checked.\n")
                                 print("VP is verified.\n")
                                 end_time = time.time()

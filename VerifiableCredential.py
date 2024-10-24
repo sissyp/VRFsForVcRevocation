@@ -24,15 +24,14 @@ def receive_vc():
 
         issuer_pk_pem = received_vc['proof']['verificationMethod']
 
-        vc_hash_id = received_vc['credentialSubject']['id']
-
         # Load the issuer's public key for verification
         proof = convert_from_hex(issuer_proof, 80)
         pk = convert_from_hex(issuer_pk_pem, 32)
-        vc_hash = bytes(vc_hash_id, 'utf-8')
+        vc_id = received_vc['id']
+        vc_id_b = bytes(vc_id, 'utf-8')
         print("Verification key in pem format", pk)
         hash_from_issuer_proof = crypto_vrf_proof_to_hash(proof)
-        output = crypto_vrf_verify(pk, proof, vc_hash)
+        output = crypto_vrf_verify(pk, proof, vc_id_b)
 
         hash_from_issuer_proof_hex = binascii.hexlify(hash_from_issuer_proof).decode('utf-8')
         output_hex = binascii.hexlify(output).decode('utf-8')

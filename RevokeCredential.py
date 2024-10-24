@@ -24,15 +24,20 @@ revocation_list = {}
 
 
 # revoke a VC by changing the status to 1
-def revoke_vc(index):
-    revocation_list[index] = 1
+def revoke_vc():
+    with open("public_keys.txt", 'r') as file:
+        h_pks = file.readlines()
+    for h_pk in h_pks:
+        revocation_list[h_pk.strip()] = 1
+
     with open("issuer_pk.txt", "r") as pk_file:
         issuer_pk = pk_file.readline()
     with open("issuer_sk.txt", "r") as sk_file:
         issuer_sk = sk_file.readline()
-
+    print(issuer_sk)
+    print(type(issuer_sk))
     pk = convert_from_hex(issuer_pk, 32)
-    sk = convert_from_hex(issuer_sk, 32)
+    sk = convert_from_hex(issuer_sk, 64)
 
     revocation_data_dict = {str(key): value for key, value in revocation_list.items()}
 
@@ -44,13 +49,14 @@ def revoke_vc(index):
 
     RevocationList["credentialSubject"]["encodedList"] = encoded_list
     encoded_list_bytes = bytes(encoded_list, 'utf-8')
+    start_time = time.time()
     issuer_proof_rl = crypto_vrf_prove(sk, encoded_list_bytes)
-
+    print("issuer proof rl", issuer_proof_rl)
     issuer_pk_hex = binascii.hexlify(pk).decode('utf-8')
     issuer_proof_rl_hex = binascii.hexlify(issuer_proof_rl).decode('utf-8')
 
     RevocationList['proof'] = {
-        "type": "Ed25519Signature2018",
+        "type": "VRF2023",
         "created": "2023-08-23T12:34:56Z",
         "verificationMethod": issuer_pk_hex,
         "proofPurpose": "assertionMethod",
@@ -73,13 +79,10 @@ def revoke_vc(index):
     # Parse the JSON string into a Python dictionary
     revocation_data = json.loads(decoded_list_json)
     print(revocation_data)
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+    print("Time required to revoke a VC: ", elapsed_time)
 
 
-with open("holder_wallet/UniversityDegreeCredential.json", "r") as file:
-    credential = json.load(file)
-idx = credential["credentialSubject"]["id"]
-start_time = time.time()
-revoke_vc(idx)
-end_time = time.time()
-elapsed_time = end_time - start_time
-print("Time required to revoke a VC: ", elapsed_time)
+revoke_vc()
+

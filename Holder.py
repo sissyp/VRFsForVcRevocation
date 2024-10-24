@@ -1,46 +1,7 @@
 import requests
-from VRFLibrary import crypto_vrf_prove
-import binascii
-from VRFLibrary import crypto_vrf_keypair, convert_from_hex
-
-
-def calculate_credential_hash():
-    vc_id_str = receive_vc_id()
-    vc_id = bytes(vc_id_str, 'utf-8')
-    h_pk, h_sk = create_keypair()
-    vc_proof = crypto_vrf_prove(h_sk, vc_id)
-    print("vc_proof", vc_proof)
-    return vc_proof
-
-
-def create_keypair():
-    pk, sk = crypto_vrf_keypair()
-    print("Public Key:", binascii.hexlify(pk).decode('utf-8'))
-    print("Secret Key:", binascii.hexlify(sk).decode('utf-8'))
-    print("sk", sk)
-    print("pk", pk)
-    pk_path = "public_key.txt"
-    sk_path = "holder_wallet/private_key.txt"
-    with open(pk_path, 'w') as file:
-        file.write(binascii.hexlify(pk).decode('utf-8'))
-    with open(sk_path, 'w') as file:
-        file.write(binascii.hexlify(sk).decode('utf-8'))
-    return pk, sk
-
-
-def receive_vc_id():
-    # URL of the issuer's endpoint
-    issuer_url = 'http://127.0.0.1:5000/get_id'
-
-    # Make a GET request to fetch the id
-    response = requests.get(issuer_url)
-
-    if response.status_code == 200:
-        response_data = response.json()
-        received_id = response_data['credential_id']
-
-        print("Received id:", received_id)
-        return received_id
+from VRFLibrary import crypto_vrf_prove, crypto_vrf_secretkeybytes
+import random
+from VRFLibrary import convert_from_hex
 
 
 def receive_challenge():
@@ -58,15 +19,43 @@ def receive_challenge():
 
 
 def calculate_proof():
+    # receive challenge from Verifier
     challenge = receive_challenge()
     print("challenge", challenge)
-    challenge_b = bytes(str(challenge), 'utf-8')
-    with open("holder_wallet/private_key.txt", 'r') as file:
-        h_sk = file.readline()
-    print("h_sk", h_sk)
-    sk = convert_from_hex(h_sk,64)
-    proof = crypto_vrf_prove(sk, challenge_b)
+    challenge_str = str(challenge)
+
+    random_number = random.randint(0, 100)
+    with open("holder_wallet/private_keys.txt", 'r') as file:
+        h_sks = file.readlines()
+    h_sk = h_sks[random_number]
+    with open("holder_wallet/private_key.txt", 'w') as file:
+        file.write(h_sk.strip())
+    print("h_sk", h_sk.strip())
+    with open("public_keys.txt", 'r') as file:
+        h_pks = file.readlines()
+    h_pk = h_pks[random_number]
+    with open("public_key.txt", 'w') as file:
+        file.write(h_pk.strip())
+    print("h_pk", h_pk.strip())
+
+    sk = convert_from_hex(h_sk, 64)
+    vc_id_str = receive_vc_id()
+    concat = vc_id_str + challenge_str
+    concat_b = bytes(concat, 'utf-8')
+    proof = crypto_vrf_prove(sk, concat_b)
     return proof
 
 
+def receive_vc_id():
+    # URL of the issuer's endpoint
+    issuer_url = 'http://127.0.0.1:5000/get_id'
 
+    # Make a GET request to fetch the id
+    response = requests.get(issuer_url)
+
+    if response.status_code == 200:
+        response_data = response.json()
+        received_id = response_data['credential_id']
+
+        print("Received id:", received_id)
+        return received_id
